@@ -155,6 +155,10 @@
     <label for="startDate">📅 Comecei em:</label>
     <input type="date" id="startDate">
     <span id="todayLabel" style="color:var(--accent)"></span>
+    <span style="display:inline-flex;gap:6px;margin-left:6px">
+      <button class="reset" id="modeRitmo" title="O conteúdo avança quando você conclui cada dia">🏃 No meu ritmo</button>
+      <button class="reset" id="modeCal" title="O dia segue a data do calendário">📅 Calendário</button>
+    </span>
     <button class="reset" id="resetBtn">↺ Zerar progresso</button>
   </div>
 
@@ -304,19 +308,23 @@ const PLAN = [
 const KEY="es60_state_v1";
 let state = load();
 function load(){
-  try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.checks)return s;}catch(e){}
-  return {startDate:isoToday(), checks:{}};
+  try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.checks){if(!s.mode)s.mode="ritmo";return s;}}catch(e){}
+  return {startDate:isoToday(), checks:{}, mode:"ritmo"};
 }
 function save(){localStorage.setItem(KEY,JSON.stringify(state));}
 function isoToday(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 
-let viewDay = currentDay();
+let viewDay = planDay();
 function currentDay(){
   const start=new Date(state.startDate+"T00:00:00");
   const now=new Date(isoToday()+"T00:00:00");
   const diff=Math.floor((now-start)/86400000)+1;
   return Math.max(1,Math.min(60,diff));
 }
+/* primeiro dia ainda não concluído (núcleo incompleto) */
+function firstUnfinishedDay(){for(let d=1;d<=60;d++){const s=dayStatus(d);if(s!=="perfect"&&s!=="core")return d;}return 60;}
+/* o dia que você deve fazer agora: pelo seu ritmo (padrão) ou pelo calendário */
+function planDay(){return state.mode==="calendario"?currentDay():firstUnfinishedDay();}
 function phaseOf(d){return PHASES.find(p=>d>=p.from&&d<=p.to)||PHASES[0];}
 function dayStatus(d){
   const c=state.checks[d]||{};
@@ -334,8 +342,9 @@ function dayStatus(d){
 const $=s=>document.querySelector(s);
 function render(){
   $("#startDate").value=state.startDate;
-  const cd=currentDay();
-  $("#todayLabel").textContent="· hoje é o Dia "+cd;
+  const cd=planDay();
+  $("#todayLabel").textContent=(state.mode==="calendario"?"· hoje (calendário): Dia ":"· seu dia atual: Dia ")+cd;
+  if($("#modeRitmo")){var _rit=state.mode!=="calendario";$("#modeRitmo").style.opacity=_rit?"1":".45";$("#modeCal").style.opacity=_rit?".45":"1";}
 
   // topo
   let doneCount=0;
@@ -416,7 +425,7 @@ function render(){
 
 function renderGrid(){
   const g=$("#grid");g.innerHTML="";
-  const cd=currentDay();
+  const cd=planDay();
   for(let d=1;d<=60;d++){
     const st=dayStatus(d);
     const cell=document.createElement("div");
@@ -430,11 +439,10 @@ function renderGrid(){
 }
 
 function calcStreak(){
-  const cd=currentDay();let s=0;
-  for(let d=cd;d>=1;d--){
-    const st=dayStatus(d);
-    if(st==="perfect"||st==="core")s++;else break;
-  }
+  let last=0;
+  for(let d=60;d>=1;d--){const st=dayStatus(d);if(st==="perfect"||st==="core"){last=d;break;}}
+  let s=0;
+  for(let d=last;d>=1;d--){const st=dayStatus(d);if(st==="perfect"||st==="core")s++;else break;}
   return s;
 }
 
@@ -473,15 +481,43 @@ function celebrate(){
 /* ============ EVENTOS ============ */
 $("#prevDay").onclick=()=>{if(viewDay>1){viewDay--;render();}};
 $("#nextDay").onclick=()=>{if(viewDay<60){viewDay++;render();}};
-$("#goToday").onclick=()=>{viewDay=currentDay();render();window.scrollTo({top:0,behavior:'smooth'});};
-$("#startDate").onchange=e=>{state.startDate=e.target.value;viewDay=currentDay();render();};
+$("#goToday").onclick=()=>{viewDay=planDay();render();window.scrollTo({top:0,behavior:'smooth'});};
+$("#startDate").onchange=e=>{state.startDate=e.target.value;viewDay=planDay();render();};
+$("#modeRitmo").onclick=()=>{state.mode="ritmo";viewDay=planDay();render();};
+$("#modeCal").onclick=()=>{state.mode="calendario";viewDay=planDay();render();};
 $("#resetBtn").onclick=()=>{
   if(confirm("Zerar TODO o progresso dos 60 dias? Isto não pode ser desfeito.")){
-    state={startDate:isoToday(),checks:{}};viewDay=1;render();
+    state={startDate:isoToday(),checks:{},mode:state.mode||"ritmo"};viewDay=planDay();render();
   }
 };
 
 render();
 </script>
+<div style="max-width:720px;margin:0 auto;padding:4px 16px 40px;text-align:center;font-family:system-ui,sans-serif">
+  <div style="font-size:12px;color:#64748b;margin-bottom:7px">💾 Backup do progresso (para outro aparelho)</div>
+  <button id="__exp" style="background:#273449;color:#e2e8f0;border:1px solid #334155;border-radius:9px;padding:10px 14px;font-size:13px;cursor:pointer;margin:3px">⬇️ Exportar</button>
+  <button id="__imp" style="background:#273449;color:#e2e8f0;border:1px solid #334155;border-radius:9px;padding:10px 14px;font-size:13px;cursor:pointer;margin:3px">⬆️ Importar</button>
+  <input type="file" id="__impFile" accept="application/json,.json" style="display:none">
+</div>
+<script>(function(){
+  var APPID="rotina", KEYS=["es60_state_v1"];
+  function exp(){try{var d={};KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v!==null)d[k]=v;});
+    var p={app:APPID,version:1,exportedAt:new Date().toISOString(),data:d};
+    var b=new Blob([JSON.stringify(p,null,2)],{type:"application/json"});var u=URL.createObjectURL(b);
+    var a=document.createElement("a");a.href=u;a.download=APPID+"-progresso.json";document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(u);},1500);}catch(e){alert("Não foi possível exportar.");}}
+  document.getElementById("__exp").onclick=exp;
+  document.getElementById("__imp").onclick=function(){document.getElementById("__impFile").click();};
+  document.getElementById("__impFile").addEventListener("change",function(e){
+    var f=e.target.files&&e.target.files[0];if(!f)return;var r=new FileReader();
+    r.onload=function(){try{var p=JSON.parse(r.result);
+      if(!p||typeof p.data!=="object"){alert("Arquivo inválido.");return;}
+      if(p.app&&p.app!==APPID){if(!confirm('Este backup é do app "'+p.app+'". Importar mesmo assim?'))return;}
+      if(!confirm("Isto vai SUBSTITUIR o progresso atual neste aparelho. Continuar?"))return;
+      Object.keys(p.data).forEach(function(k){localStorage.setItem(k,p.data[k]);});
+      alert("Progresso importado! A página vai recarregar.");location.reload();
+    }catch(err){alert("Arquivo inválido. Use um arquivo exportado por este app.");}finally{e.target.value="";}};
+    r.readAsText(f);});
+})();</script>
 </body>
 </html>
