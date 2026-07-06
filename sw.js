@@ -1,5 +1,5 @@
 /* Service worker — instalável + offline */
-const CACHE = 'rotina-idioma-v1';
+const CACHE = 'rotina-idioma-v2';
 const ASSETS = [
   './',
   './index.html',
