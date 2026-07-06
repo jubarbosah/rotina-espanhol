@@ -4,6 +4,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Rotina">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <title>Minha rotina de idioma</title>
 <style>
 :root{
@@ -326,4 +329,11 @@ $("#resetBtn").onclick=()=>{if(confirm("Zerar toda a configuração e o progress
 
 renderCfg();
 render();
+
+/* ===== PWA: instalável + offline ===== */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
 </script>
