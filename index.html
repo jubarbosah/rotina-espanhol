@@ -166,9 +166,19 @@ const DEFAULTS = [
 ];
 
 const KEY="rotina_idioma_v1";
-function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.cfg)return s;}catch(e){}
+function load(){
+  let s=null;try{s=JSON.parse(localStorage.getItem(KEY));}catch(e){}
+  // monta o cfg completo a partir dos padrões e mescla o que estiver salvo,
+  // garantindo que toda atividade (pron, review, etc.) sempre exista — mesmo
+  // vindo de uma versão anterior — para o render() nunca quebrar/travar.
   const cfg={pronDay:5};DEFAULTS.forEach(a=>cfg[a.id]={on:true,min:a.min});
-  return {cfg,checks:{}};}
+  if(s&&s.cfg){
+    if(s.cfg.pronDay!=null)cfg.pronDay=Number(s.cfg.pronDay)||0;
+    DEFAULTS.forEach(a=>{const c=s.cfg[a.id];if(c&&typeof c==="object"){
+      const m=Number(c.min);cfg[a.id]={on:c.on!==false,min:Number.isFinite(m)?m:a.min};}});
+  }
+  const checks=(s&&s.checks&&typeof s.checks==="object")?s.checks:{};
+  return {cfg,checks};}
 let S=load();
 function save(){localStorage.setItem(KEY,JSON.stringify(S));}
 
